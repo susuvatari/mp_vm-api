@@ -1,30 +1,23 @@
-# -*- coding: utf-8 -*- 
 import logging
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 from os import getenv
 from typing import Optional, List, Dict, Any
-
 logger = logging.getLogger(__name__)
-
 class MaxPatrolVMClient:
-    
     def __init__(self, base_url: str, verify_ssl: bool = False):
         self.base_url = base_url.rstrip("/")
         self.verify_ssl = verify_ssl
         self.session = requests.Session()
         self.session.verify = verify_ssl
-        
-        # Настройка ретраев
         retries = Retry(
             total=5,
-            backoff_factor=1,  # Сон между попытками: 1s, 2s, 4s, 8s...
+            backoff_factor=1, 
             status_forcelist=[500, 502, 503, 504],
             raise_on_status=False
         )
         self.session.mount("https://", HTTPAdapter(max_retries=retries))
-        
     def authenticate(self) -> bool:
         """Аутентификация в Identity Service MaxPatrol (порт 3334)."""
         url = f"{self.base_url}:3334/connect/token"
@@ -43,8 +36,6 @@ class MaxPatrolVMClient:
             token = response.json().get("access_token")
             if not token:
                 raise ValueError("Access token fields missing in response.")
-                
-            # Обновляем дефолтные заголовки сессии для всех будущих запросов
             self.session.headers.update({
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/json, text/plain, */*",
@@ -82,11 +73,8 @@ class MaxPatrolVMClient:
         
         try:
             logger.info(f"Sending GET request to /export for token: {pdql_token}")
-            # Увеличиваем timeout до 120 секунд, так как экспорт собирается ~42 секунды
             response = self.session.get(url, params=params, timeout=600)
             response.raise_for_status()
-            
-            # Возвращаем текстовое содержимое CSV-ответа
             csv_text = response.text
             logger.info(f"Successfully received CSV export snapshot ({len(csv_text)} bytes).")
             return csv_text
