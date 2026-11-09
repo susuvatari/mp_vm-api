@@ -17,7 +17,6 @@ class MPVMPipelineService:
     def enrich_and_clean(self, raw_records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         logger.info(f"Starting parsing and enrichment of {len(raw_records)} records...")
         processed_data = []
-
         for raw_item in raw_records:
             model = MPVMRecord.model_validate(raw_item)
             record_dict = model.to_flat_dict()
@@ -39,12 +38,9 @@ class MPVMPipelineService:
                         "IT System": "-", "Status": "-"
                     })
             processed_data.append(record_dict)
-
         logger.info("Enrichment phase completed successfully.")
         return processed_data
-
     def save_output_files(self, data: List[Dict[str, Any]], integration_name: str, query_name: str) -> bool:
-        """Сохранение обработанного пакета в единую директорию jira-pdql (JSON, CSV, XLSX)."""
         if not data:
             logger.warning("No data to save.")
             return False
