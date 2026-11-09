@@ -1,24 +1,19 @@
-# -*- coding: utf-8 -*- 
+from os import mkdir, remove, stat, getenv, walk 
+from os.path import join, exists 
+from dotenv import load_dotenv 
+from api_mp_vm.main_api_mp_vm import main_api_mp_vm 
+from modules.jira.main_task_creater import JiraTaskCreator 
+from modules.jira.issue_generator import VulnerabilityIssueManager 
+from modules.jira.closure_manager import VulnerabilityClosureManager 
 import sys
 from datetime import date, datetime 
 from time import time 
 import logging 
 import os 
-from os import mkdir, remove, stat, getenv, walk 
-from os.path import join, exists 
-from dotenv import load_dotenv 
-
-# Импорт главного модуля MP VM 
-from api_mp_vm.main_api_mp_vm import main_api_mp_vm 
-# Импорт модулей Jira
-from modules.jira.main_task_creater import JiraTaskCreator 
-from modules.jira.issue_generator import VulnerabilityIssueManager 
-from modules.jira.closure_manager import VulnerabilityClosureManager 
 
 load_dotenv() 
 
 def del_old_files(dir_path): 
-    """Удаляет файлы старше 90 дней."""
     if not exists(dir_path): 
         return 
     logging.info(f"Start module del_old_files({dir_path})") 
@@ -37,8 +32,6 @@ if __name__ == "__main__":
         mkdir("logs") 
     
     start_time = datetime.now() 
-    
-    # Настройка логирования
     logging.basicConfig( 
         level=logging.INFO, 
         filename="logs/log_" + str(date.today()) + ".log", 
@@ -46,25 +39,18 @@ if __name__ == "__main__":
         format="%(asctime)s %(levelname)s %(message)s", 
         encoding="utf-8", 
     ) 
-    
-    # Дублируем логи в консоль для GitLab CI/CD
     console = logging.StreamHandler() 
     console.setLevel(logging.INFO) 
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s') 
     console.setFormatter(formatter) 
     logging.getLogger('').addHandler(console) 
-    
     logging.info("--- Start Global Script ---") 
-    
-    # Проверяем, запущен ли скрипт в специальном режиме двухнедельной проверки задач
     is_biweekly_mode = "--biweekly" in sys.argv
 
     if is_biweekly_mode:
         logging.info("!!! BIWEEKLY MODE DETECTED: Processing 'Waiting for support' and 'Pending' tasks !!!")
     else:
         logging.info("DAILY MODE: Processing standard 'User action' tasks.")
-
-    # 1. БЛОК АВТОПРОВЕРКИ (Ежедневный или Воскресный Двухнедельный)
     try: 
         j_headers = { 
             "Authorization": f"Bearer {getenv('JIRA_TOKEN')}", 
@@ -79,19 +65,12 @@ if __name__ == "__main__":
             getenv("JIRA_BASE_URL"), j_headers, 
             getenv("JIRA_URL"), s_headers 
         ) 
-        
-        # ПЕРЕДАЕМ РЕЖИМ РАБОТЫ: обычный (False) или двухнедельный воскресный (True)
         closure_manager.run_workflow(is_biweekly=is_biweekly_mode) 
         
     except Exception as e: 
         logging.error(f"Critical error during closure verification: {e}") 
-
-    # 2. ПОНЕДЕЛЬНИЧНЫЙ БЛОК: Сбор данных (ETL) и создание новых задач
-    # Запускается только по понедельникам и только если это НЕ воскресный проход
     if datetime.now().weekday() == 0 and not is_biweekly_mode:
         logging.info("Today is Monday. Starting Full ETL and Jira Task Creation...")
-    #test if True and not is_biweekly_mode:
-    #test     logging.info("Today is Monday (EMULATION). Starting Full ETL and Jira Task Creation...")
         if main_api_mp_vm():
             logging.info("API MP VM ETL: OK") 
             try: 
@@ -112,8 +91,6 @@ if __name__ == "__main__":
             logging.info("Full ETL skipped: Biweekly validation run.")
         else:
             logging.info("Today is not Monday. Full ETL and new tasks creation skipped.") 
-
-    # 3. ОЧИСТКА (Выполняется всегда)
     del_old_files("logs/") 
     del_old_files("files/") 
     logging.info(f"End script. Total running time = {datetime.now() - start_time}")
